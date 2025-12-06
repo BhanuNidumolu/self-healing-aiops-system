@@ -208,6 +208,73 @@ Visit:
 
 👉 http://localhost:8086/supervise
 
+<img width="1919" height="1004" alt="Screenshot 2025-12-06 183929" src="https://github.com/user-attachments/assets/e91b32f9-e25d-4d88-8178-2608d77a842f" />
+
+---
+
+## 🐳 Run the Entire System with Docker
+
+This project supports **one-click multi-agent startup** using Docker Compose — no need to run services manually.
+
+### Prerequisites
+- Docker Desktop installed
+- Docker Compose enabled
+- API keys configured in environment variables (`.env` file or system env)
+
+---
+
+### 🚀 Start All Agents at Once
+
+```bash
+docker-compose up --build
+Stop the system
+bash
+Copy code
+docker-compose down
+Once services start, open in browser:
+
+📌 http://localhost:8086/supervise
+
+This triggers the full AIOps workflow:
+
+Metrics → Logs → Anomaly Detection → Healing → Final Report ✔
+
+Container Overview
+Service	Container Port	Purpose
+monitored-service	8081 → 8080	Simulated target application
+metrics-agent	5173 → 8080	Fetch metrics from monitored service
+logs-agent	5174 → 8080	Analyze logs & classify issues
+anomaly-agent	5175 → 8080	Detect abnormal behavior
+healing-agent	5176 → 8080	Perform recovery actions
+supervisor-service	8086 → 8080	Main orchestrator calling all agents
+
+All containers communicate internally over a shared Docker network aiops-net.
+
+🌍 Environment Variables
+Create a .env file before running (without committing it to GitHub):
+
+env
+
+API_KEY=your_groq_or_openai_api_key_here
+
+
+🔥 Advantages of Docker Mode
+✔ Zero manual startup — one command boot
+✔ Each service runs in its own isolated container
+✔ Reproducible environment for demos & deployment
+✔ Ready for Kubernetes migration later
+
+
+---
+
+If you want, I can also generate:
+
+📌 **Docker badges** for README  
+📌 **Docker deploy script**  
+📌 **Kubernetes YAML next step**  
+
+Just say **"next: kube deployment"** or **"add docker badge
+```
 <p align="center"> <img width="700" src="https://github.com/user-attachments/assets/3c77cf4d-5816-4d4b-8945-c3e0d5f24adf" /> <img width="700" src="https://github.com/user-attachments/assets/50503e4e-24d2-4c7e-943b-dba6ab6c7100" /> </p>
 🧪 Testing Scenarios Supported
 
