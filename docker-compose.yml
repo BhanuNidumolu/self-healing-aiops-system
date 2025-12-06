@@ -1,0 +1,94 @@
+services:
+  monitored-service:
+    build:
+      context: .
+      dockerfile: monitored-service/Dockerfile
+      args:
+        MODULE_NAME: monitored-service
+    container_name: monitored-service
+    ports:
+      - "8081:8080"
+    restart: always
+    networks:
+      - aiops-net
+
+  metrics-agent:
+    build:
+      context: .
+      dockerfile: metrics-agent-service/Dockerfile
+      args:
+        MODULE_NAME: metrics-agent-service
+    container_name: metrics-agent
+    ports:
+      - "5173:8080"
+    restart: always
+    networks:
+      - aiops-net
+
+  logs-agent:
+    build:
+      context: .
+      dockerfile: logs-agent-service/Dockerfile
+      args:
+        MODULE_NAME: logs-agent-service
+    container_name: logs-agent
+    ports:
+      - "5174:8080"
+    restart: always
+    networks:
+      - aiops-net
+
+  anomaly-agent:
+    build:
+      context: .
+      dockerfile: anomaly-agent-service/Dockerfile
+      args:
+        MODULE_NAME: anomaly-agent-service
+    container_name: anomaly-agent
+    ports:
+      - "5175:8080"
+    restart: always
+    networks:
+      - aiops-net
+
+  healing-agent:
+    build:
+      context: .
+      dockerfile: healing-agent-service/Dockerfile
+      args:
+        MODULE_NAME: healing-agent-service
+    container_name: healing-agent
+    ports:
+      - "5176:8080"
+    restart: always
+    networks:
+      - aiops-net
+
+  supervisor-service:
+    build:
+      context: .
+      dockerfile: supervisor-service/Dockerfile
+      args:
+        MODULE_NAME: supervisor-service
+    container_name: supervisor-service
+    ports:
+      - "8086:8080"
+    restart: always
+    depends_on:
+      - metrics-agent
+      - logs-agent
+      - anomaly-agent
+      - healing-agent
+      - monitored-service
+    environment:
+      API_KEY: ${API_KEY}
+      METRICS_URL: http://metrics-agent:8080
+      LOGS_URL: http://logs-agent:8080
+      ANOMALY_URL: http://anomaly-agent:8080
+      HEALING_URL: http://healing-agent:8080
+    networks:
+      - aiops-net
+
+networks:
+  aiops-net:
+    driver: bridge
