@@ -1,0 +1,141 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-redis
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: sentinel-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - monitored-service
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  monitored-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+      args:
+        MODULE_NAME: monitored-service
+    container_name: monitored-service
+    environment:
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  metrics-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+      args:
+        MODULE_NAME: metrics-agent-service
+    container_name: metrics-agent
+    environment:
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - monitored-service
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  logs-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+      args:
+        MODULE_NAME: logs-agent-service
+    container_name: logs-agent
+    environment:
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - monitored-service
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  anomaly-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+      args:
+        MODULE_NAME: anomaly-agent-service
+    container_name: anomaly-agent
+    environment:
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  healing-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.healing
+      args:
+        MODULE_NAME: healing-agent-service
+    container_name: healing-agent
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+  supervisor-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+      args:
+        MODULE_NAME: supervisor-service
+    container_name: supervisor-service
+    ports:
+      - "127.0.0.1:8086:8080"  # Localhost only — tunnel via SSH for debug
+    environment:
+      - JAVA_OPTS=-Xms128m -Xmx256m
+      - API_KEY=${API_KEY}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - METRICS_URL=http://metrics-agent:8080
+      - LOGS_URL=http://logs-agent:8080
+      - ANOMALY_URL=http://anomaly-agent:8080
+      - HEALING_URL=http://healing-agent:8080
+      - AWS_REGION=ap-south-1
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - metrics-agent
+      - logs-agent
+      - anomaly-agent
+      - healing-agent
+      - monitored-service
+    networks:
+      - aiops-net
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+
+networks:
+  aiops-net:
+    driver: bridge

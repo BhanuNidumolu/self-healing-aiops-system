@@ -1,24 +1,27 @@
 package com.selfheal.healingagentservice.service;
 
-import com.selfheal.healingagentservice.model.HealingResponse;
 import org.springframework.stereotype.Service;
+import java.util.Map;
 
 @Service
 public class HealingService {
 
-    public HealingResponse restartService(String service) {
-        HealingResponse res = new HealingResponse();
-        res.setAction("restart");
-        res.setStatus("SUCCESS");
-        res.setMessage("Service " + service + " restarted successfully.");
-        return res;
+    public Map<String,Object> restartService(String service) {
+        return Map.of(
+                "action", "restart",
+                "service", service,
+                "status", "SUCCESS",
+                "message", "Service " + service + " restarted successfully."
+        );
     }
 
-    public HealingResponse scaleService(String service, int count) {
-        HealingResponse res = new HealingResponse();
-        res.setAction("scale");
-        res.setStatus("SUCCESS");
-        res.setMessage("Service " + service + " scaled to " + count + " instances.");
-        return res;
+    public Map<String,Object> scaleService(String service, int count) {
+        return Map.of(
+                "action", "scale",
+                "service", service,
+                "instances", count,
+                "status", "SUCCESS",
+                "message", "Scaled to " + count + " instances successfully."
+        );
     }
 }

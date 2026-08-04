@@ -1,77 +1,137 @@
 package com.selfheal.supervisorservice.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.selfheal.supervisorservice.model.SystemReport;
+import com.selfheal.supervisorservice.engine.SafetyVerificationEngine;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class SupervisorService {
 
+    private final SafetyVerificationEngine safetyEngine;
+    private final EventStoreService eventStore;
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate rest = new RestTemplate();
 
-    public SupervisorService(ChatClient chatClient) {
+    @Value("${MONITORED_SERVICE_URL:http://monitored-service:8080}")
+    private String monitoredServiceUrl;
+
+    @Value("${HEALING_SERVICE_URL:http://healing-agent:8080}")
+    private String healingServiceUrl;
+
+    public SupervisorService(SafetyVerificationEngine safetyEngine, EventStoreService eventStore, ChatClient chatClient) {
+        this.safetyEngine = safetyEngine;
+        this.eventStore = eventStore;
         this.chatClient = chatClient;
     }
 
-    public SystemReport runSupervisor() {
+    public Map<String, Object> supervise() {
+        // Fetch raw metrics and logs directly from monitored-service
+        Map<String, Object> metrics = fetchMetrics();
+        List<String> rawLogs = fetchLogs();
+        Map<String, Object> logs = Map.of("rawLogs", rawLogs != null ? rawLogs : List.of());
 
-        // 1. Ask the supervisor ChatClient to diagnose & heal using MCP tools.
-       return chatClient
-                .prompt()
-                .user("""
-                        Diagnose the current system health using all available MCP tools.
-                        If needed, apply healing through the heal agent.
-                        """)
-                .call()
-                .entity(SystemReport.class);
-//
-//        SystemReport report = new SystemReport();
-//
-//        try {
-//            // 2. Parse the JSON returned by the LLM into a Map.
-//            Map<String, Object> root = objectMapper.readValue(
-//                    rawJson, new TypeReference<Map<String, Object>>() {}
-//            );
-//
-//            // 3. Safely extract fields expected in SystemReport.
-//            Object metrics = root.get("metrics");
-//            Object logs = root.get("logs");
-//            Object anomaly = root.get("anomaly");
-//            Object healingAction = root.get("healingAction");
-//            Object finalStatus = root.get("finalStatus");
-//
-//            if (metrics instanceof Map<?, ?> m) {
-//                //noinspection unchecked
-//                report.setMetrics((Map<String, Object>) m);
-//            }
-//            if (logs instanceof Map<?, ?> m) {
-//                //noinspection unchecked
-//                report.setLogs((Map<String, Object>) m);
-//            }
-//            if (anomaly instanceof Map<?, ?> m) {
-//                //noinspection unchecked
-//                report.setAnomaly((Map<String, Object>) m);
-//            }
-//            if (healingAction instanceof Map<?, ?> m) {
-//                //noinspection unchecked
-//                report.setHealingAction((Map<String, Object>) m);
-//            }
-//            if (finalStatus instanceof String s) {
-//                report.setFinalStatus(s);
-//            } else {
-//                report.setFinalStatus("Supervisor response parsed, but no 'finalStatus' field found.");
-//            }
-//
-//        } catch (Exception e) {
-//            // 4. If parsing fails, at least return the raw AI response for debugging.
-//            report.setFinalStatus("Failed to parse AI JSON. Raw response: " + rawJson);
-//        }
-//
-//        return report;
+        log.info("Metrics: {}", metrics);
+        log.info("Logs: {}", logs);
+
+        // --- Fine-Tuned Qwen LLM decision generation via llama-server ---
+        String prompt = "System Telemetry:\nMetrics: " + metrics + "\nLogs: " + logs;
+        log.info("Routing telemetry to fine-tuned Qwen model...");
+        
+        String llmResponse = chatClient.prompt().user(prompt).call().content();
+        log.info("Qwen Model Output: {}", llmResponse);
+
+        // Map LLM output to proposal
+        Map<String, Object> proposal = Map.of(
+            "command", "restart", 
+            "service", "monitored-service", 
+            "reason", llmResponse != null ? llmResponse : "Qwen Anomaly Classification"
+        );
+
+        log.info("Proposed: {}", proposal);
+
+        SafetyVerificationEngine.SafetyResult safety = safetyEngine.verify(proposal, metrics, logs);
+        log.info("Safety: {} | Rule: {}", safety.getDecision(), safety.getRuleId());
+
+        Map<String, Object> finalAction;
+        String safetyExplanation;
+
+        switch (safety.getDecision()) {
+            case ALLOW -> {
+                finalAction = proposal;
+                safetyExplanation = "Approved: " + safety.getExplanation();
+            }
+            case OVERRIDE -> {
+                finalAction = safety.getOverriddenAction();
+                safetyExplanation = "OVERRIDDEN [" + safety.getRuleId() + "]: " + safety.getExplanation();
+                log.warn("{}", safetyExplanation);
+            }
+            case BLOCK -> {
+                finalAction = Map.of("command", "none", "reason", "Blocked: " + safety.getExplanation());
+                safetyExplanation = "BLOCKED [" + safety.getRuleId() + "]: " + safety.getExplanation();
+            }
+            case ESCALATE -> {
+                finalAction = Map.of(
+                    "command", "request_human_approval",
+                    "service", proposal.getOrDefault("service", "monitored-service"),
+                    "requested_action", proposal.get("command"),
+                    "reason", safety.getExplanation()
+                );
+                safetyExplanation = "ESCALATED [" + safety.getRuleId() + "]: " + safety.getExplanation();
+            }
+            default -> {
+                finalAction = Map.of("command", "none");
+                safetyExplanation = "Unknown";
+            }
+        }
+
+        Map<String, Object> healingResult = Map.of("status", "NO_ACTION");
+        if (safety.getDecision() == SafetyVerificationEngine.SafetyResult.Decision.ALLOW && !"none".equals(finalAction.get("command"))) {
+            try {
+                healingResult = rest.postForObject(healingServiceUrl + "/execute", finalAction, Map.class);
+                log.info("Healing: {}", healingResult);
+            } catch (Exception e) {
+                log.error("Failed to trigger healing execution: {}", e.getMessage());
+                healingResult = Map.of("status", "ERROR", "message", e.getMessage());
+            }
+        }
+
+        Map<String, Object> report = Map.of(
+            "metrics", metrics != null ? metrics : Map.of(),
+            "logs", logs,
+            "llm_proposal", proposal,
+            "safety_decision", safety.getDecision().toString(),
+            "safety_explanation", safetyExplanation,
+            "final_action", finalAction,
+            "healing_result", healingResult,
+            "finalStatus", safetyExplanation
+        );
+
+        eventStore.saveEvent(report);
+        return report;
+    }
+
+    private Map<String, Object> fetchMetrics() {
+        try {
+            return rest.getForObject(monitoredServiceUrl + "/metrics", Map.class);
+        } catch (Exception e) {
+            log.error("Error fetching metrics from {}: {}", monitoredServiceUrl, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private List<String> fetchLogs() {
+        try {
+            return rest.getForObject(monitoredServiceUrl + "/logs", List.class);
+        } catch (Exception e) {
+            log.error("Error fetching logs from {}: {}", monitoredServiceUrl, e.getMessage());
+            return List.of();
+        }
     }
 }

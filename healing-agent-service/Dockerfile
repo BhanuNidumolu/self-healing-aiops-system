@@ -8,6 +8,7 @@ RUN mvn -q -DskipTests package -pl ${MODULE_NAME} -am
 
 # ---- Runtime Stage ----
 FROM eclipse-temurin:21-jre-jammy
+RUN apt-get update && apt-get install -y docker.io
 WORKDIR /app
 
 ARG MODULE_NAME

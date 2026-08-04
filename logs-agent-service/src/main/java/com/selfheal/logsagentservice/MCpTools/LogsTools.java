@@ -23,14 +23,4 @@ public class LogsTools {
         return service.fetchLogs();
     }
 
-    @Tool(
-            name = "fetch_logs_scenario",
-            description = """
-                    Fetch synthetic logs for a specific failure scenario.
-                    Supported values: 'db', 'memory', 'cpu', 'network', 'circuit', 'security'.
-                    """)
-    public LogAnalysis fetchLogsScenario(String scenario) {
-        System.out.println("LOGS FETCHED (scenario: " + scenario + ")");
-        return service.fetchLogs(scenario);
-    }
 }

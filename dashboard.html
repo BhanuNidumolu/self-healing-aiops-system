@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIRCUIT-SENTINEL | Autonomous Resilience Dashboard</title>
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --panel: #111827;
+            --border: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --cyan: #06b6d4;
+            --purple: #a855f7;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .brand span {
+            font-size: 0.75rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 2s infinite;
+        }
+        .status-dot.warn { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+        .status-dot.danger { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--green);
+        }
+        .card.warn::before { background: var(--yellow); }
+        .card.danger::before { background: var(--red); }
+        .card.cyan::before { background: var(--cyan); }
+        .card.purple::before { background: var(--purple); }
+        .card-label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+        .card-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        .card-sub {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .panel h2 {
+            font-size: 0.9rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .log-entry {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        .log-time { color: var(--muted); min-width: 60px; }
+        .log-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .tag-override { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
+        .tag-allow { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+        .tag-block { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+        .tag-info { background: rgba(6, 182, 212, 0.15); color: var(--cyan); }
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:hover { border-color: var(--cyan); background: #1a2332; }
+        button.primary { background: var(--cyan); color: #000; border-color: var(--cyan); }
+        button.primary:hover { background: #0891b2; }
+        button.danger { background: var(--red); color: #fff; border-color: var(--red); }
+        button.danger:hover { background: #dc2626; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        .empty-state {
+            color: var(--muted);
+            font-style: italic;
+            padding: 16px 0;
+            text-align: center;
+        }
+        .protection-pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--purple);
+            margin-right: 6px;
+            margin-bottom: 6px;
+        }
+        .metric-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .metric-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: repeat(2, 1fr); }
+            .row { grid-template-columns: 1fr; }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="status-dot" id="connDot"></div>
+            <div>
+                <h1>⚡ CIRCUIT-SENTINEL</h1>
+                <span>Autonomous Resilience Management</span>
+            </div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--muted);">
+            Refresh: <span id="refreshRate">2s</span> | 
+            Last: <span id="lastUpdate">--:--:--</span>
+        </div>
+    </header>
+
+    <div class="actions">
+        <button class="danger" onclick="injectChaos()">
+            💣 Inject Chaos (Memory)
+        </button>
+        <button class="danger" onclick="injectChaos()">
+            💣 Inject Chaos (Memory)
+        </button>
+        <button onclick="triggerSupervise()">
+            🧠 Trigger Supervisor
+        </button>
+        <button onclick="resetSystem()">
+            🔄 Reset System
+        </button>
+        <button onclick="testTraffic()">
+            🌐 Test Traffic (NGINX)
+        </button>
+    </div>
+
+    <div class="grid">
+        <div class="card" id="cardCircuit">
+            <div class="card-label">Circuit State</div>
+            <div class="card-value" id="circuitState">--</div>
+            <div class="card-sub" id="circuitSub">Waiting for data...</div>
+        </div>
+        <div class="card cyan" id="cardMemory">
+            <div class="card-label">Memory Usage</div>
+            <div class="card-value" id="memoryVal">--%</div>
+            <div class="metric-bar"><div class="metric-bar-fill" id="memoryBar" style="width:0%;background:var(--cyan)"></div></div>
+        </div>
+        <div class="card purple" id="cardLatency">
+            <div class="card-label">Latency</div>
+            <div class="card-value" id="latencyVal">-- ms</div>
+            <div class="card-sub" id="latencySub">P99 estimate</div>
+        </div>
+        <div class="card" id="cardErrors">
+            <div class="card-label">Error Rate</div>
+            <div class="card-value" id="errorVal">--%</div>
+            <div class="metric-bar"><div class="metric-bar-fill" id="errorBar" style="width:0%;background:var(--green)"></div></div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="panel">
+            <h2>🛡️ Active Protections</h2>
+            <div id="protections">
+                <div class="empty-state">No active protections</div>
+            </div>
+            <div style="margin-top:16px;">
+                <div class="card-label">Safety Quota</div>
+                <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+                    <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+                        <div id="quotaBar" style="width:0%;height:100%;background:var(--green);border-radius:4px;transition:width 0.3s;"></div>
+                    </div>
+                    <span id="quotaText" style="font-family:monospace;font-size:0.85rem;">0 / 3</span>
+                </div>
+            </div>
+            <div style="margin-top:16px;">
+                <div class="card-label">Queued Requests</div>
+                <div class="card-value" id="queuedVal" style="font-size:1.2rem;margin-top:4px;">0</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>📜 Agent Decision Log</h2>
+            <div id="decisionLog">
+                <div class="empty-state">No decisions yet. Inject chaos and trigger supervisor.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:24px;">
+        <h2>📊 Raw System Status</h2>
+        <pre id="rawJson" style="font-family:'SF Mono',monospace;font-size:0.75rem;color:var(--muted);overflow-x:auto;">{}</pre>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8086';
+        const MONITORED_BASE = 'http://localhost:8081';
+        const NGINX_BASE = 'http://localhost:8080';
+
+        let decisionHistory = [];
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/status`);
+                const data = await res.json();
+                updateDashboard(data);
+                document.getElementById('connDot').className = 'status-dot';
+            } catch (e) {
+                document.getElementById('connDot').className = 'status-dot danger';
+                console.error('Status fetch failed', e);
+            }
+        }
+
+        async function fetchSafety() {
+            try {
+                const res = await fetch(`${API_BASE}/api/safety-status`);
+                const data = await res.json();
+                updateSafety(data);
+            } catch (e) {}
+        }
+
+        async function fetchEvents() {
+            try {
+                const res = await fetch(`${API_BASE}/api/events`);
+                const data = await res.json();
+                updateEvents(data);
+            } catch (e) {}
+        }
+
+        function updateDashboard(data) {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+
+            // Circuit state
+            const state = data.circuit_state || 'CLOSED';
+            const stateEl = document.getElementById('circuitState');
+            const cardCircuit = document.getElementById('cardCircuit');
+            stateEl.textContent = state;
+
+            if (state === 'OPEN') {
+                stateEl.style.color = 'var(--red)';
+                cardCircuit.className = 'card danger';
+                document.getElementById('circuitSub').textContent = 'Traffic blocked. Requests queued.';
+            } else if (state === 'HALF_OPEN') {
+                stateEl.style.color = 'var(--yellow)';
+                cardCircuit.className = 'card warn';
+                document.getElementById('circuitSub').textContent = 'Probe traffic allowed (10%)';
+            } else {
+                stateEl.style.color = 'var(--green)';
+                cardCircuit.className = 'card';
+                document.getElementById('circuitSub').textContent = 'Normal operation';
+            }
+
+            // Queued
+            document.getElementById('queuedVal').textContent = data.queued_requests || 0;
+
+            // Protections
+            const protContainer = document.getElementById('protections');
+            const protections = data.active_protections || [];
+            if (protections.length === 0) {
+                protContainer.innerHTML = '<div class="empty-state">No active protections</div>';
+            } else {
+                protContainer.innerHTML = protections.map(p => 
+                    `<span class="protection-pill">${p.replace('_', ' ')}</span>`
+                ).join('');
+            }
+        }
+
+        function updateSafety(data) {
+            const heals = data.heals_this_hour || 0;
+            const quota = data.heal_quota || 3;
+            const pct = (heals / quota) * 100;
+            document.getElementById('quotaBar').style.width = pct + '%';
+            document.getElementById('quotaBar').style.background = heals >= quota ? 'var(--red)' : 'var(--green)';
+            document.getElementById('quotaText').textContent = `${heals} / ${quota}`;
+        }
+
+        function updateEvents(events) {
+            if (!events || events.length === 0) return;
+            // Merge with history to avoid duplicates
+            events.forEach(e => {
+                if (!decisionHistory.find(h => h.timestamp === e.timestamp && h.type === e.type)) {
+                    decisionHistory.unshift({...e, time: new Date().toLocaleTimeString()});
+                }
+            });
+            if (decisionHistory.length > 20) decisionHistory = decisionHistory.slice(0, 20);
+
+            const container = document.getElementById('decisionLog');
+            container.innerHTML = decisionHistory.map(e => {
+                let tagClass = 'tag-info';
+                let tagText = e.type || 'EVENT';
+                if (e.type === 'CIRCUIT_BREAK') { tagClass = 'tag-override'; tagText = 'CIRCUIT BREAK'; }
+                if (e.type === 'HEAP_DUMP_CAPTURED') { tagClass = 'tag-allow'; tagText = 'HEAP DUMP'; }
+                return `
+                    <div class="log-entry">
+                        <span class="log-time">${e.time}</span>
+                        <span class="log-tag ${tagClass}">${tagText}</span>
+                        <span style="color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.reason || ''}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function injectChaos() {
+            try {
+                const res = await fetch(`${MONITORED_BASE}/chaos/memory`, {method: 'POST'});
+                const text = await res.text();
+                showToast('Chaos injected: ' + text, 'success');
+                setTimeout(fetchStatus, 500);
+            } catch (e) {
+                showToast('Chaos injection failed: ' + e.message, 'error');
+            }
+        }
+
+        async function triggerSupervise() {
+            try {
+                const res = await fetch(`${API_BASE}/supervise`);
+                const data = await res.json();
+                showToast(`Supervisor: ${data.safety_decision || 'DONE'}`, 'success');
+
+                // Add to decision log
+                decisionHistory.unshift({
+                    time: new Date().toLocaleTimeString(),
+                    type: data.safety_decision,
+                    reason: data.safety_explanation || data.finalStatus,
+                    raw: data
+                });
+                if (decisionHistory.length > 20) decisionHistory = decisionHistory.slice(0, 20);
+
+                // Update memory/latency from metrics if available
+                if (data.metrics) {
+                    const mem = data.metrics.memory || 0;
+                    document.getElementById('memoryVal').textContent = mem + '%';
+                    document.getElementById('memoryBar').style.width = Math.min(mem, 100) + '%';
+                    document.getElementById('memoryBar').style.background = mem > 85 ? 'var(--red)' : mem > 60 ? 'var(--yellow)' : 'var(--cyan)';
+
+                    const lat = data.metrics.latency || 0;
+                    document.getElementById('latencyVal').textContent = lat + ' ms';
+                    document.getElementById('latencySub').textContent = lat > 2000 ? 'DEGRADED' : 'Healthy';
+                    document.getElementById('latencySub').style.color = lat > 2000 ? 'var(--red)' : 'var(--muted)';
+
+                    const err = data.metrics.errors || 0;
+                    document.getElementById('errorVal').textContent = err + '%';
+                    document.getElementById('errorBar').style.width = Math.min(err * 10, 100) + '%';
+                    document.getElementById('errorBar').style.background = err > 10 ? 'var(--red)' : 'var(--green)';
+                }
+
+                updateDashboard(data);
+                fetchSafety();
+            } catch (e) {
+                showToast('Supervisor failed: ' + e.message, 'error');
+            }
+        }
+
+        async function resetSystem() {
+            try {
+                await fetch(`${MONITORED_BASE}/chaos/reset`, {method: 'POST'});
+                const res = await fetch(`${API_BASE}/api/reset`, {method: 'POST'});
+                const data = await res.json();
+                showToast(data.message || 'System reset', 'success');
+                setTimeout(() => { fetchStatus(); fetchSafety(); }, 500);
+            } catch (e) {
+                showToast('Reset failed: ' + e.message, 'error');
+            }
+        }
+
+        async function testTraffic() {
+            try {
+                const res = await fetch(`${NGINX_BASE}/api/process`);
+                const data = await res.json();
+                showToast('Traffic OK: ' + data.status, 'success');
+            } catch (e) {
+                const msg = e.message || 'Request failed';
+                if (msg.includes('503') || msg.includes('Unava')) {
+                    showToast('Traffic BLOCKED: Circuit is OPEN', 'error');
+                } else {
+                    showToast('Traffic error: ' + msg, 'error');
+                }
+            }
+        }
+
+        function showToast(msg, type) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show ' + type;
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // Auto refresh
+        setInterval(() => { fetchStatus(); fetchSafety(); fetchEvents(); }, 2000);
+        fetchStatus(); fetchSafety(); fetchEvents();
+    </script>
+</body>
+</html>

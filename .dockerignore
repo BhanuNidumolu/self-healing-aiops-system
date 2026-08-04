@@ -1,0 +1,7 @@
+# Don't ignore target folders - we need pre-built JARs
+!*/target/*.jar
+
+# Ignore usual junk
+.git
+.idea
+*.md

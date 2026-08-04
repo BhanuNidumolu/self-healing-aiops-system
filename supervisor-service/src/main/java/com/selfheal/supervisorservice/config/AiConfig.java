@@ -1,29 +1,18 @@
 package com.selfheal.supervisorservice.config;
 
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.chat.client.ChatClient;
 
 @Configuration
 public class AiConfig {
 
-    /**
-     * ChatClient that knows about ALL MCP tools from:
-     * - metric-agent
-     * - logs-agent
-     * - anomaly-agent
-     * - heal-agent
-     *
-     * Spring AI auto-creates the SyncMcpToolCallbackProvider based on
-     * spring.ai.mcp.client.* properties.
-     */
     @Bean
-    public ChatClient chatClient(ChatModel chatModel,
-                                 SyncMcpToolCallbackProvider toolCallbackProvider) {
+    public ChatClient chatClient(OpenAiChatModel model, SyncMcpToolCallbackProvider syncMcpToolCallbackProvider) {
 
-        return ChatClient.builder(chatModel)
+        return ChatClient.builder(model)
                 .defaultSystem("""
                         You are a self-healing supervisor for a distributed system.
                         You have access to multiple specialized MCP agents:
@@ -46,7 +35,7 @@ public class AiConfig {
                            }
                         Do not wrap the JSON in markdown. No extra text.
                         """)
-                .defaultToolCallbacks(toolCallbackProvider.getToolCallbacks())
+                .defaultToolCallbacks(syncMcpToolCallbackProvider.getToolCallbacks())
                 .build();
     }
 }

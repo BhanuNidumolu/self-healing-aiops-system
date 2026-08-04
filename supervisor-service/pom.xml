@@ -17,6 +17,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-ai.version>1.1.0</spring-ai.version>
+        <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>
 
     <dependencyManagement>
@@ -41,6 +42,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
 
         <!-- AI Supervisor -->
         <dependency>
@@ -52,6 +57,18 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-client</artifactId>
+        </dependency>
+
+        <!-- AWS DynamoDB SDK + Standard HTTP URL Connection Client -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+            <version>${aws.sdk.version}</version>
         </dependency>
 
         <dependency>
@@ -77,14 +94,14 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <parameters>true</parameters>
                 </configuration>
             </plugin>
 
-            <!-- SPRING BOOT PLUGIN – THIS MAKES THE JAR EXECUTABLE -->
+            <!-- Spring Boot Plugin -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <!-- Version inherited from parent (3.2.5) – no hardcoding needed -->
                 <executions>
                     <execution>
                         <goals>

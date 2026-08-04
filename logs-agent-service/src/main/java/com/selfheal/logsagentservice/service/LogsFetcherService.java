@@ -15,8 +15,8 @@ public class LogsFetcherService {
 
     public LogAnalysis fetchLogs() {
         // Default: call monitored-service directly
-        String url = "http://localhost:8081/logs";
-
+        String url = "http://monitored-service:8080/logs";
+//        String url = "http://localhost:8081/logs";      // correct for local
         List<String> logs = rest.getForObject(url, List.class);
         if (logs == null) return null;
 

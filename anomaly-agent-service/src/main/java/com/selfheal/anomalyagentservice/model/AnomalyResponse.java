@@ -1,23 +1,16 @@
 package com.selfheal.anomalyagentservice.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class AnomalyResponse {
 
-    private boolean anomaly;
-    private String reason;
+    private boolean anomaly;       // true/false if issue detected
+    private String reason;         // explanation
+    private double confidence;     // probability or score (0.0 - 1.0)
 
-    public boolean isAnomaly() {
-        return anomaly;
-    }
-
-    public void setAnomaly(boolean anomaly) {   // <--- REQUIRED METHOD
-        this.anomaly = anomaly;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {      // <--- REQUIRED METHOD
-        this.reason = reason;
-    }
 }

@@ -8,8 +8,10 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class McpServerConfig {
+
     @Bean
     ToolCallbackProvider toolCallbackProvider(MetricsTools tools) {
         return MethodToolCallbackProvider.builder().toolObjects(tools).build();
     }
+
 }

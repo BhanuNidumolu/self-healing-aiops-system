@@ -1,7 +1,11 @@
 package com.selfheal.healingagentservice.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@AllArgsConstructor
+@NoArgsConstructor
 @Data
 public class HealingResponse {
     private String action;   // restart/scale
