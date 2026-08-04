@@ -1,48 +1,61 @@
 package com.selfheal.monitoredservice.controller;
 
+import com.selfheal.monitoredservice.model.ChaosState;
 import com.selfheal.monitoredservice.model.Metrics;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.Random;
 
 @RestController
+@Slf4j
 public class MetricsController {
 
-    private final Random random = new Random();
+    private final ChaosState state;
+
+    public MetricsController(ChaosState state) {
+        this.state = state;
+    }
 
     @GetMapping("/metrics")
     public Metrics getMetrics() {
 
-        // Base CPU + Memory
-        int cpu = 40 + random.nextInt(50);         // 40–90%
-        int memory = 50 + random.nextInt(40);      // 50–90%
-        int disk = 60 + random.nextInt(35);        // 60–95%
+        Random random = new Random();
 
-        // Latency increases if CPU or memory high
-        int baseLatency = 80 + random.nextInt(100);
-        int latency = baseLatency + (cpu / 2) + (memory / 3);
+        int cpu = 35 + random.nextInt(25) + (state.getMemoryLoad() / 200);
+        if(state.getCpuStress().get()) cpu += 30 + random.nextInt(20);
+        cpu = Math.min(cpu, 100);
 
-        // Error count increases with poor system health
+        long total = Runtime.getRuntime().totalMemory();
+        long used  = total - Runtime.getRuntime().freeMemory();
+        int memory = (int)((used * 100) / total);
+
+        // Disk simulated but optional — static or random
+        int disk = 40 + random.nextInt(20);                 // future: mount monitoring here
+
+        int latency = 120 + memory * 3 + state.getSlowFactor();
+        int requestRate = 150 + random.nextInt(100);        // baseline req/sec simulation
+        int activeThreads = Thread.activeCount();           // real JVM count
+        int gcPauseMs = (memory > 80) ? random.nextInt(200) + 100 : random.nextInt(50);
+
         int errors = 0;
-        if (cpu > 80) errors += random.nextInt(3);
-        if (memory > 85) errors += random.nextInt(2);
-        if (latency > 250) errors += random.nextInt(4);
+        if(memory > 75) errors += random.nextInt(4);
+        if(cpu > 85) errors += random.nextInt(3);
+        if(latency > 700) errors += 3;
 
-        Metrics metrics = new Metrics();
-        metrics.setCpu(cpu);
-        metrics.setMemory(memory);
-        metrics.setDisk(disk);
-        metrics.setLatency(latency);
-        metrics.setErrors(errors);
-        metrics.setTimestamp(Instant.now().toString());
+        Metrics m = new Metrics();
+        m.setCpu(cpu);
+        m.setMemory(memory);
+        m.setDisk(disk);
+        m.setLatency(latency);
+        m.setErrors(errors);
+        m.setRequestRate(requestRate);
+        m.setActiveThreads(activeThreads);
+        m.setGcPauseMs(gcPauseMs);
+        m.setTimestamp(Instant.now().toString());
 
-        // Bonus: additional useful metrics
-        metrics.setRequestRate(100 + random.nextInt(200));   // req/min
-        metrics.setActiveThreads(50 + random.nextInt(50));
-        metrics.setGcPauseMs(random.nextInt(30));            // 0-30ms
-
-        return metrics;
+        log.warn("📊 METRICS --> {}", m);
+        return m;
     }
+
 }

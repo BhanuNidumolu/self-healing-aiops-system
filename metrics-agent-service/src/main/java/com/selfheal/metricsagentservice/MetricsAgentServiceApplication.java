@@ -1,6 +1,7 @@
 package com.selfheal.metricsagentservice;
 
 import com.selfheal.metricsagentservice.service.MetricsTools;
+import org.springaicommunity.mcp.annotation.McpTool;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.SpringApplication;

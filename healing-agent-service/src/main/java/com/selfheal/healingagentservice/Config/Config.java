@@ -8,14 +8,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class Config {
-    private final HealingTools healingTools;
-
-    public Config(HealingTools healingTools) {
-        this.healingTools = healingTools;
-    }
 
     @Bean
-    public ToolCallbackProvider toolCallbackProvider(HealingTools healingTools) {
-        return MethodToolCallbackProvider.builder().toolObjects(healingTools).build();
+    public ToolCallbackProvider toolCallbackProvider(HealingTools tools) {
+        return MethodToolCallbackProvider.builder()
+                .toolObjects(tools)
+                .build();
     }
 }

@@ -8,12 +8,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class Config {
-    private final AnomalyTools anomalyTools;
-    Config (AnomalyTools anomalyTools) {
-        this.anomalyTools = anomalyTools;
-    }
+
     @Bean
-    public ToolCallbackProvider toolCallbackProvider (AnomalyTools anomalyTools) {
-        return MethodToolCallbackProvider.builder().toolObjects(anomalyTools).build();
+    public ToolCallbackProvider toolCallbackProvider(AnomalyTools anomalyTools) {
+        return MethodToolCallbackProvider.builder()
+                .toolObjects(anomalyTools)
+                .build();
     }
 }

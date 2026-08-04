@@ -1,93 +1,164 @@
+version: '3.8'
+
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - aiops-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: sentinel-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - monitored-service
+    networks:
+      - aiops-net
+
   monitored-service:
     build:
       context: .
-      dockerfile: monitored-service/Dockerfile
+      dockerfile: Dockerfile.simple
       args:
         MODULE_NAME: monitored-service
     container_name: monitored-service
     ports:
       - "8081:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms48m -Xmx96m
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
     networks:
       - aiops-net
 
   metrics-agent:
     build:
       context: .
-      dockerfile: metrics-agent-service/Dockerfile
+      dockerfile: Dockerfile.simple
       args:
         MODULE_NAME: metrics-agent-service
     container_name: metrics-agent
     ports:
       - "5173:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms48m -Xmx96m
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - monitored-service
     networks:
       - aiops-net
 
   logs-agent:
     build:
       context: .
-      dockerfile: logs-agent-service/Dockerfile
+      dockerfile: Dockerfile.simple
       args:
         MODULE_NAME: logs-agent-service
     container_name: logs-agent
     ports:
       - "5174:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms48m -Xmx96m
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - monitored-service
     networks:
       - aiops-net
 
   anomaly-agent:
     build:
       context: .
-      dockerfile: anomaly-agent-service/Dockerfile
+      dockerfile: Dockerfile.simple
       args:
         MODULE_NAME: anomaly-agent-service
     container_name: anomaly-agent
     ports:
       - "5175:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms48m -Xmx96m
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
     networks:
       - aiops-net
 
   healing-agent:
     build:
       context: .
-      dockerfile: healing-agent-service/Dockerfile
+      dockerfile: Dockerfile.healing
       args:
         MODULE_NAME: healing-agent-service
     container_name: healing-agent
     ports:
       - "5176:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms128m -Xmx384m -XX:+UseG1GC
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - aiops-net
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: sentinel-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
     networks:
       - aiops-net
 
   supervisor-service:
     build:
       context: .
-      dockerfile: supervisor-service/Dockerfile
+      dockerfile: Dockerfile.simple
       args:
         MODULE_NAME: supervisor-service
     container_name: supervisor-service
     ports:
       - "8086:8080"
-    restart: always
+    environment:
+      - JAVA_OPTS=-Xms128m -Xmx384m -XX:+UseG1GC
+      - SPRING_AI_OPENAI_BASE_URL=http://host.docker.internal:8080
+      - SPRING_AI_OPENAI_API_KEY=dummy-token
+      - SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=qwen-log-classifier
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - AWS_DYNAMODB_ENDPOINT=http://sentinel-dynamodb:8000
+      - MONITORED_SERVICE_URL=http://monitored-service:8080
+      - HEALING_SERVICE_URL=http://healing-agent:8080
+      - METRICS_AGENT_MCP_URL=http://metrics-agent:8080
+      - LOGS_AGENT_MCP_URL=http://logs-agent:8080
+      - ANOMALY_AGENT_MCP_URL=http://anomaly-agent:8080
+      - HEALING_AGENT_MCP_URL=http://healing-agent:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
+      - redis
+      - dynamodb-local
       - metrics-agent
       - logs-agent
       - anomaly-agent
       - healing-agent
       - monitored-service
-    environment:
-      API_KEY: ${API_KEY}
-      METRICS_URL: http://metrics-agent:8080
-      LOGS_URL: http://logs-agent:8080
-      ANOMALY_URL: http://anomaly-agent:8080
-      HEALING_URL: http://healing-agent:8080
     networks:
       - aiops-net
+
+volumes:
+  redis-data:
+  dynamodb-data:
 
 networks:
   aiops-net:

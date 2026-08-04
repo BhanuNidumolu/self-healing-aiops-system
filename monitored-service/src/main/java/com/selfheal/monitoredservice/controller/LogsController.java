@@ -1,61 +1,52 @@
 package com.selfheal.monitoredservice.controller;
 
+import com.selfheal.monitoredservice.model.ChaosState;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
 public class LogsController {
 
+    private final ChaosState state;
+
+    public LogsController(ChaosState state) {
+        this.state = state;
+    }
+
     @GetMapping("/logs")
     public List<String> getLogs() {
-        return List.of(
-                // Critical DB issues
-                "ERROR TimeoutException: DB connection failed after 30 seconds",
-                "ERROR SQLException: Deadlock detected on orders_table",
-                "ERROR ConnectionPoolExhausted: All 50 DB connections in use",
-                "WARN Slow query detected: SELECT * FROM payments took 912ms",
-                "WARN DB connection retry attempt 4/5",
+        List<String> logs = new ArrayList<>();
+        boolean hasChaos = state.getMemoryLoad() > 0 
+                        || !state.getMemoryLeakHolder().isEmpty()
+                        || state.getCpuStress().get() 
+                        || state.getSlowFactor() > 0;
 
-                // JVM and memory issues
-                "WARN GC Overhead: 92% time spent in GC cycle",
-                "ERROR OutOfMemoryError: Java heap space",
-                "INFO GC completed: freed 256MB",
-                "WARN Memory usage high: 82%",
+        logs.add("INFO /health check served in " + (8 + (int)(Math.random() * 15)) + "ms");
 
-                // API latency issues
-                "WARN High latency: /api/orders took 540ms",
-                "ERROR GatewayTimeoutException: /api/payments exceeded 5s threshold",
-                "INFO Request served: /api/products in 65ms",
+        if (hasChaos) {
+            if (state.getMemoryLoad() > 20 || !state.getMemoryLeakHolder().isEmpty()) {
+                int heap = Math.min(98, 65 + state.getMemoryLoad());
+                logs.add("WARN GC Overhead: " + (75 + state.getMemoryLoad()/4) + "% time in GC");
+                logs.add("ERROR OutOfMemoryError: Java heap space");
+                logs.add("WARN Heap usage: " + heap + "%");
+            }
+            if (state.getCpuStress().get()) {
+                logs.add("WARN CPU usage: " + (90 + (int)(Math.random() * 9)) + "%");
+                logs.add("WARN ThreadPool queue: 150 pending");
+            }
+            if (state.getSlowFactor() > 0) {
+                logs.add("WARN Latency: /api/orders took " + (300 + state.getSlowFactor()) + "ms");
+                logs.add("ERROR GatewayTimeout: exceeded 5s");
+            }
+        } else {
+            logs.add("INFO Cache hit ratio: 94%");
+            logs.add("INFO Thread pool stable");
+        }
 
-                // Authentication / security warnings
-                "WARN Authentication failed for user: admin",
-                "ERROR Invalid JWT token for request /api/secure/payments",
-                "INFO Login attempt for user customer_23",
-
-                // System warnings / info
-                "WARN Disk usage at 79%",
-                "INFO Scheduled backup completed in 13s",
-                "INFO Worker thread pool resized from 50 → 75",
-
-                // Microservice communication issues
-                "WARN Service Mesh: Retry attempt 2 for inventory-service",
-                "ERROR CircuitBreaker OPEN for shipping-service",
-                "INFO CircuitBreaker HALF-OPEN: testing downstream service",
-
-                // Cache layer warnings
-                "WARN Cache miss rate high: 47%",
-                "INFO Cache refreshed: products-cache",
-                "ERROR RedisTimeout: Redis did not respond in 200ms",
-
-                // Network issues
-                "WARN Network latency spike detected: 310ms",
-                "ERROR Failed to reach payment-gateway after 3 retries",
-
-                // Successful logs
-                "INFO Request served successfully for /api/health",
-                "INFO Request served successfully for /api/orders/1234"
-        );
+        logs.add("INFO Disk usage: " + (50 + (int)(Math.random() * 20)) + "%");
+        return logs;
     }
 }
